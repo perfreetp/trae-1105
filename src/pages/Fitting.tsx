@@ -1,18 +1,29 @@
 import { useState } from 'react';
-import { fittingRecords, customers } from '../data/mockData';
+import { useApp } from '../context/AppContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Fitting() {
+  const navigate = useNavigate();
+  const { fittingRecords, updateFittingRecord, addFollowUpRecord, updateCustomer } = useApp();
   const [activeTab, setActiveTab] = useState(0);
-  const [records, setRecords] = useState(fittingRecords);
-  const [showCreate, setShowCreate] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState('');
-  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
-  const [status, setStatus] = useState('');
-  const [note, setNote] = useState('');
-  const [showStatusDialog, setShowStatusDialog] = useState(false);
-  const [currentRecord, setCurrentRecord] = useState<string | null>(null);
+  const [showStatusPopup, setShowStatusPopup] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<string | null>(null);
+  const [newStatus, setNewStatus] = useState<'purchased' | 'abandoned'>('purchased');
+  const [reason, setReason] = useState('');
 
   const tabs = ['全部', '试衣中', '已购买', '未购买'];
+  const statusMap: Record<string, 'all' | 'trying' | 'purchased' | 'abandoned'> = {
+    '0': 'all',
+    '1': 'trying',
+    '2': 'purchased',
+    '3': 'abandoned'
+  };
+
+  const filteredRecords = fittingRecords.filter(record => {
+    const status = statusMap[activeTab];
+    if (status === 'all') return true;
+    return record.status === status;
+  });
 
   const getStatusText = (status: string) => {
     switch (status) {
@@ -23,38 +34,48 @@ export default function Fitting() {
     }
   };
 
-  const getStatusType = (status: string) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case 'trying': return 'warning';
-      case 'purchased': return 'success';
-      case 'abandoned': return 'danger';
-      default: return 'default';
+      case 'trying': return '#1989fa';
+      case 'purchased': return '#07c160';
+      case 'abandoned': return '#969799';
+      default: return '#323233';
     }
   };
 
-  const filteredRecords = records.filter(r => {
-    if (activeTab === 0) return true;
-    if (activeTab === 1) return r.status === 'trying';
-    if (activeTab === 2) return r.status === 'purchased';
-    if (activeTab === 3) return r.status === 'abandoned';
-    return true;
-  });
-
-  const openStatusDialog = (recordId: string) => {
-    setCurrentRecord(recordId);
-    setShowStatusDialog(true);
+  const handleStatusUpdate = (recordId: string, status: 'purchased' | 'abandoned') => {
+    setSelectedRecord(recordId);
+    setNewStatus(status);
+    setReason('');
+    setShowStatusPopup(true);
   };
 
-  const updateStatus = () => {
-    if (currentRecord && status) {
-      setRecords(prev => prev.map(r => 
-        r.id === currentRecord ? { ...r, status: status as any, note } : r
-      ));
-      setShowStatusDialog(false);
-      setStatus('');
-      setNote('');
-      alert('状态已更新');
+  const confirmStatusUpdate = () => {
+    if (!selectedRecord) return;
+    
+    updateFittingRecord(selectedRecord, {
+      status: newStatus,
+      note: reason
+    });
+
+    const record = fittingRecords.find(r => r.id === selectedRecord);
+    if (record && newStatus === 'purchased') {
+      addFollowUpRecord({
+        customerId: record.customerId,
+        customerName: record.customerName,
+        type: 'aftersale',
+        content: `购买了${record.products.map(p => p.productName).join('、')}，3天后回访`,
+        date: new Date().toLocaleDateString('zh-CN'),
+        status: 'pending'
+      });
+
+      updateCustomer(record.customerId, {
+        lastVisit: new Date().toLocaleDateString('zh-CN')
+      });
     }
+
+    setShowStatusPopup(false);
+    alert(`已登记为${newStatus === 'purchased' ? '已购买' : '未购买'}`);
   };
 
   return (
@@ -62,6 +83,12 @@ export default function Fitting() {
       <div className="page-header">
         <div className="navbar">
           <span className="navbar-title">试衣记录</span>
+          <span 
+            style={{ position: 'absolute', right: '16px', fontSize: '14px', color: '#1989fa', cursor: 'pointer' }}
+            onClick={() => navigate('/products')}
+          >
+            新建试衣
+          </span>
         </div>
         <div className="tabs">
           {tabs.map((tab, index) => (
@@ -77,196 +104,121 @@ export default function Fitting() {
       </div>
 
       <div style={{ padding: '12px' }}>
-        <button className="btn btn-primary btn-block" onClick={() => setShowCreate(true)}>
-          ➕ 新建试衣清单
-        </button>
-      </div>
-
-      <div style={{ padding: '0 12px' }}>
-        <div className="card-section" style={{ margin: 0 }}>
-          {filteredRecords.map(record => (
-            <div
-              key={record.id}
-              className="cell"
-              onClick={() => {
-                if (record.status === 'trying') {
-                  openStatusDialog(record.id);
-                }
-              }}
-            >
-              <span className="cell-icon">👤</span>
-              <div className="cell-content">
-                <div className="cell-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {record.customerName}
-                  <span className={`tag tag-${getStatusType(record.status)}`} style={{ fontSize: '11px' }}>
+        {filteredRecords.length === 0 ? (
+          <div style={{ padding: '48px 16px', textAlign: 'center', color: '#969799' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>👗</div>
+            <div>暂无试衣记录</div>
+            <div style={{ fontSize: '13px', marginTop: '4px' }}>去商品详情页添加试衣清单吧</div>
+          </div>
+        ) : (
+          filteredRecords.map(record => (
+            <div key={record.id} className="card-section" style={{ margin: '0 0 12px 0' }}>
+              <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #ebedf0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontWeight: 500 }}>{record.customerName}</span>
+                  <span 
+                    style={{ 
+                      fontSize: '12px', 
+                      color: getStatusColor(record.status),
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      background: record.status === 'trying' ? '#e8f3ff' : record.status === 'purchased' ? '#e8f9f1' : '#f7f8fa'
+                    }}
+                  >
                     {getStatusText(record.status)}
                   </span>
                 </div>
-                <div className="cell-label">
-                  <div style={{ fontSize: '12px', color: '#646566' }}>
-                    {record.products.map(p => `${p.productName}(${p.color} ${p.size})`).join('、')}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#969799', marginTop: '2px' }}>
-                    {record.createdAt}
-                  </div>
-                  {record.note && (
-                    <div style={{ fontSize: '11px', color: '#ff976a', marginTop: '2px' }}>
-                      备注：{record.note}
-                    </div>
-                  )}
-                </div>
+                <span style={{ fontSize: '12px', color: '#969799' }}>{record.createdAt}</span>
               </div>
+              
+              {record.products.map((p, index) => (
+                <div key={index} className="cell">
+                  <div className="cell-content">
+                    <div className="cell-title">{p.productName}</div>
+                    <div className="cell-label">{p.color} / {p.size}</div>
+                  </div>
+                </div>
+              ))}
+
+              {record.note && (
+                <div style={{ padding: '8px 16px', fontSize: '12px', color: '#969799', borderTop: '1px solid #f7f8fa' }}>
+                  备注：{record.note}
+                </div>
+              )}
+
               {record.status === 'trying' && (
-                <span className="cell-value">›</span>
+                <div style={{ padding: '12px 16px', display: 'flex', gap: '8px', borderTop: '1px solid #ebedf0' }}>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ flex: 1 }}
+                    onClick={() => handleStatusUpdate(record.id, 'purchased')}
+                  >
+                    登记成交
+                  </button>
+                  <button 
+                    className="btn btn-default" 
+                    style={{ flex: 1 }}
+                    onClick={() => handleStatusUpdate(record.id, 'abandoned')}
+                  >
+                    登记未购买
+                  </button>
+                </div>
               )}
             </div>
-          ))}
-        </div>
+          ))
+        )}
       </div>
 
-      {showCreate && (
-        <div className="popup-mask" onClick={() => setShowCreate(false)}>
-          <div className="popup-content" onClick={(e) => e.stopPropagation()} style={{ height: '80%' }}>
-            <div style={{ padding: '16px', height: '100%', overflowY: 'auto' }}>
-              <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>新建试衣清单</div>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>选择顾客</div>
-                <div
-                  className="input-field"
-                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                  onClick={() => setShowCustomerPicker(true)}
-                >
-                  <span style={{ color: selectedCustomer ? '#323233' : '#969799' }}>
-                    {selectedCustomer ? customers.find(c => c.id === selectedCustomer)?.name : '请选择顾客'}
-                  </span>
-                  <span>›</span>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>添加商品</div>
-                <button className="btn btn-default btn-small">➕ 扫码/搜索添加</button>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>已选商品</div>
-                <div style={{ background: '#f7f8fa', borderRadius: '8px', padding: '12px' }}>
-                  <div className="cell" style={{ padding: '8px 0', background: 'transparent' }}>
-                    <div className="cell-content">
-                      <div className="cell-title">羊毛混纺双排扣大衣</div>
-                      <div className="cell-label">驼色 M</div>
-                    </div>
-                    <span className="cell-value">¥3580</span>
-                  </div>
-                  <div className="cell" style={{ padding: '8px 0', background: 'transparent', borderBottom: 'none' }}>
-                    <div className="cell-content">
-                      <div className="cell-title">羊绒圆领针织衫</div>
-                      <div className="cell-label">米白 M</div>
-                    </div>
-                    <span className="cell-value">¥1280</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>备注</div>
-                <textarea
-                  className="input-field textarea"
-                  placeholder="请输入备注信息"
-                />
-              </div>
-
-              <button
-                className="btn btn-primary btn-block"
-                style={{ position: 'sticky', bottom: '0' }}
-                onClick={() => {
-                  setShowCreate(false);
-                  alert('试衣清单已创建');
-                }}
-              >
-                创建试衣清单
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCustomerPicker && (
-        <div className="popup-mask" onClick={() => setShowCustomerPicker(false)}>
+      {showStatusPopup && (
+        <div className="popup-mask" onClick={() => setShowStatusPopup(false)}>
           <div className="popup-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: '16px', textAlign: 'center', fontWeight: 600, borderBottom: '1px solid #ebedf0' }}>
-              选择顾客
-            </div>
-            {customers.map(customer => (
-              <div
-                key={customer.id}
-                className="cell"
-                onClick={() => {
-                  setSelectedCustomer(customer.id);
-                  setShowCustomerPicker(false);
-                }}
-              >
-                <img
-                  src={customer.avatar}
-                  alt=""
-                  style={{ width: '32px', height: '32px', borderRadius: '50%', marginRight: '12px' }}
-                />
-                <div className="cell-content">
-                  <div className="cell-title">{customer.name}</div>
-                </div>
+            <div style={{ padding: '16px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>
+                {newStatus === 'purchased' ? '登记成交' : '登记未购买'}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+              
+              {newStatus === 'abandoned' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>流失原因</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
+                    {['价格偏高', '尺码不合适', '款式不满意', '需要考虑', '其他'].map(r => (
+                      <span
+                        key={r}
+                        onClick={() => setReason(r)}
+                        className={`tag ${reason === r ? 'tag-primary' : 'tag-default'}`}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-      {showStatusDialog && (
-        <div className="popup-mask center" onClick={() => setShowStatusDialog(false)}>
-          <div className="popup-content center" onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: '20px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', textAlign: 'center' }}>
-                更新状态
-              </div>
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ marginBottom: '12px' }}>
-                  <div
-                    className={`radio-item ${status === 'purchased' ? 'checked' : ''}`}
-                    onClick={() => setStatus('purchased')}
-                  >
-                    <span className="radio-circle"></span>
-                    <span>成交购买</span>
-                  </div>
+              {newStatus === 'purchased' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>成交备注</div>
+                  <textarea
+                    className="input-field textarea"
+                    placeholder="请输入成交备注（选填）"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
                 </div>
-                <div>
-                  <div
-                    className={`radio-item ${status === 'abandoned' ? 'checked' : ''}`}
-                    onClick={() => setStatus('abandoned')}
-                  >
-                    <span className="radio-circle"></span>
-                    <span>未购买</span>
-                  </div>
-                </div>
-              </div>
-              <textarea
-                className="input-field textarea"
-                placeholder="请输入成交/流失原因"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                style={{ marginBottom: '16px' }}
-              />
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  className="btn btn-default"
+              )}
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  className="btn btn-default" 
                   style={{ flex: 1 }}
-                  onClick={() => setShowStatusDialog(false)}
+                  onClick={() => setShowStatusPopup(false)}
                 >
                   取消
                 </button>
-                <button
-                  className="btn btn-primary"
+                <button 
+                  className="btn btn-primary" 
                   style={{ flex: 1 }}
-                  onClick={updateStatus}
+                  onClick={confirmStatusUpdate}
                 >
                   确认
                 </button>

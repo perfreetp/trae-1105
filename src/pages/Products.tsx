@@ -1,19 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { products } from '../data/mockData';
+import { useApp } from '../context/AppContext';
 
 export default function Products() {
   const navigate = useNavigate();
+  const { products } = useApp();
   const [searchText, setSearchText] = useState('');
   const [showScanPopup, setShowScanPopup] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('全部');
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [scanResult, setScanResult] = useState('');
 
-  const categories = ['全部', '上衣', '裤装', '裙装', '外套', '配饰'];
-  const styles = ['通勤', '休闲', '优雅', '复古', '运动'];
-  const colors = ['黑色', '白色', '灰色', '驼色', '藏蓝', '红色'];
+  const categories = ['全部', '外套', '针织衫', '裤装', '衬衫', '半身裙', '鞋履'];
+  const styles = ['通勤', '休闲', '优雅', '复古', '商务'];
+  const colors = ['黑色', '白色', '灰色', '驼色', '藏蓝', '红色', '米色', '焦糖色'];
+
+  const styleMatchMap: Record<string, string[]> = {
+    '通勤': ['简约通勤', '通勤'],
+    '休闲': ['休闲时尚', '休闲'],
+    '优雅': ['优雅气质', '优雅'],
+    '复古': ['复古学院', '复古'],
+    '商务': ['商务正装', '商务'],
+  };
 
   const filteredProducts = products.filter(p => {
     if (searchText && !p.name.includes(searchText) && !p.code.includes(searchText)) {
@@ -22,8 +32,12 @@ export default function Products() {
     if (selectedCategory !== '全部' && p.category !== selectedCategory) {
       return false;
     }
-    if (selectedStyles.length > 0 && !selectedStyles.includes(p.style)) {
-      return false;
+    if (selectedStyles.length > 0) {
+      const matched = selectedStyles.some(style => {
+        const keywords = styleMatchMap[style] || [style];
+        return keywords.some(keyword => p.style.includes(keyword));
+      });
+      if (!matched) return false;
     }
     if (selectedColors.length > 0 && !p.colors.some(c => selectedColors.includes(c))) {
       return false;
@@ -47,31 +61,54 @@ export default function Products() {
     );
   };
 
+  const handleScan = () => {
+    const randomProduct = products[Math.floor(Math.random() * products.length)];
+    setScanResult(randomProduct.code);
+    setTimeout(() => {
+      setShowScanPopup(false);
+      navigate(`/product/${randomProduct.id}`);
+    }, 800);
+  };
+
+  const resetFilter = () => {
+    setSelectedStyles([]);
+    setSelectedColors([]);
+    setSelectedCategory('全部');
+  };
+
   return (
     <div className="page-container">
       <div className="page-header">
         <div className="navbar">
           <span className="navbar-title">商品查询</span>
         </div>
-        <div className="search-box">
-          <span>🔍</span>
-          <input
-            type="text"
-            className="search-input"
-            placeholder="搜索货号/商品名称"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-          />
-          <span style={{ cursor: 'pointer', fontSize: '20px' }} onClick={() => setShowScanPopup(true)}>📷</span>
-          <span style={{ cursor: 'pointer', fontSize: '20px' }} onClick={() => setShowFilter(true)}>⚙️</span>
+        <div style={{ padding: '0 12px 12px', display: 'flex', gap: '8px' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <input
+              type="text"
+              className="input-field"
+              placeholder="搜索商品名称、货号"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              style={{ paddingLeft: '36px' }}
+            />
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#969799' }}>🔍</span>
+          </div>
+          <button 
+            className="btn btn-primary" 
+            style={{ padding: '0 12px' }}
+            onClick={() => setShowScanPopup(true)}
+          >
+            📷 扫码
+          </button>
         </div>
-        <div style={{ display: 'flex', padding: '8px 12px', gap: '8px', overflowX: 'auto', background: '#fff' }}>
+        <div style={{ display: 'flex', gap: '8px', padding: '0 12px 12px', overflowX: 'auto' }}>
           {categories.map(cat => (
             <span
               key={cat}
               onClick={() => setSelectedCategory(cat)}
               className={`tag ${selectedCategory === cat ? 'tag-primary' : 'tag-default'}`}
-              style={{ flexShrink: 0, cursor: 'pointer' }}
+              style={{ cursor: 'pointer', flexShrink: 0 }}
             >
               {cat}
             </span>
@@ -79,68 +116,95 @@ export default function Products() {
         </div>
       </div>
 
-      <div className="product-grid">
-        {filteredProducts.map(product => (
-          <div
-            key={product.id}
-            className="product-card"
-            onClick={() => navigate(`/product/${product.id}`)}
-          >
-            <img src={product.image} alt="" className="product-image" />
-            <div className="product-info">
-              <div className="product-name">{product.name}</div>
-              <div style={{ marginTop: '4px' }}>
-                <span className="tag tag-primary tag-plain" style={{ fontSize: '11px' }}>{product.style}</span>
+      <div 
+        style={{ 
+          padding: '8px 12px', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          background: '#fff',
+          borderBottom: '1px solid #ebedf0'
+        }}
+      >
+        <span style={{ fontSize: '13px', color: '#969799' }}>
+          共 {filteredProducts.length} 件商品
+        </span>
+        <span 
+          style={{ fontSize: '13px', color: '#1989fa', cursor: 'pointer' }}
+          onClick={() => setShowFilter(true)}
+        >
+          筛选 {selectedStyles.length + selectedColors.length > 0 ? `(${selectedStyles.length + selectedColors.length})` : ''}
+        </span>
+      </div>
+
+      <div style={{ padding: '12px' }}>
+        <div className="product-grid">
+          {filteredProducts.map(product => (
+            <div
+              key={product.id}
+              className="product-card"
+              onClick={() => navigate(`/product/${product.id}`)}
+            >
+              <img src={product.image} alt="" className="product-image" />
+              <div className="product-info">
+                <div className="product-name">{product.name}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="product-price">¥{product.price}</span>
+                  <span className="tag tag-default tag-plain" style={{ fontSize: '10px' }}>
+                    {product.style}
+                  </span>
+                </div>
               </div>
-              <div className="product-price">¥{product.price}</div>
             </div>
+          ))}
+        </div>
+        {filteredProducts.length === 0 && (
+          <div style={{ padding: '48px 16px', textAlign: 'center', color: '#969799' }}>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>🔍</div>
+            <div>没有找到相关商品</div>
           </div>
-        ))}
+        )}
       </div>
 
       {showScanPopup && (
         <div className="popup-mask" onClick={() => setShowScanPopup(false)}>
           <div className="popup-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ padding: '16px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>扫码查款</div>
-              <div style={{ 
-                height: '200px', 
-                background: '#f7f8fa', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                borderRadius: '8px',
-                marginBottom: '16px'
-              }}>
-                <div style={{ textAlign: 'center', color: '#969799' }}>
-                  <span style={{ fontSize: '48px' }}>📷</span>
-                  <div style={{ marginTop: '8px' }}>扫描商品条码/二维码</div>
+            <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: '80px', marginBottom: '16px' }}>📷</div>
+              <div style={{ fontSize: '16px', marginBottom: '24px' }}>扫码查款</div>
+              {scanResult ? (
+                <div>
+                  <div style={{ color: '#07c160', marginBottom: '8px' }}>✓ 扫码成功</div>
+                  <div style={{ fontSize: '14px', color: '#646566' }}>货号：{scanResult}</div>
                 </div>
-              </div>
-              <button
-                className="btn btn-primary btn-block"
-                onClick={() => {
-                  setShowScanPopup(false);
-                  navigate('/product/p1');
-                }}
-              >
-                模拟扫码成功
-              </button>
+              ) : (
+                <button className="btn btn-primary btn-block" onClick={handleScan}>
+                  模拟扫码
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {showFilter && (
-        <div className="popup-mask" onClick={() => setShowFilter(false)} style={{ justifyContent: 'flex-end' }}>
+        <div className="popup-mask" onClick={() => setShowFilter(false)}>
           <div 
             className="popup-content" 
-            onClick={(e) => e.stopPropagation()} 
-            style={{ width: '80%', borderRadius: '12px 0 0 12px', maxHeight: '100vh' }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ height: '70%' }}
           >
-            <div style={{ padding: '16px' }}>
-              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>筛选</div>
-              
+            <div style={{ padding: '16px', height: '100%', overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <span style={{ fontSize: '18px', fontWeight: 600 }}>筛选</span>
+                <span 
+                  style={{ fontSize: '14px', color: '#969799', cursor: 'pointer' }}
+                  onClick={resetFilter}
+                >
+                  重置
+                </span>
+              </div>
+
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '12px' }}>风格</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -173,25 +237,13 @@ export default function Products() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  className="btn btn-default"
-                  style={{ flex: 1 }}
-                  onClick={() => {
-                    setSelectedStyles([]);
-                    setSelectedColors([]);
-                  }}
-                >
-                  重置
-                </button>
-                <button
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                  onClick={() => setShowFilter(false)}
-                >
-                  确定
-                </button>
-              </div>
+              <button
+                className="btn btn-primary btn-block"
+                style={{ position: 'sticky', bottom: '0' }}
+                onClick={() => setShowFilter(false)}
+              >
+                确定 ({filteredProducts.length}件)
+              </button>
             </div>
           </div>
         </div>

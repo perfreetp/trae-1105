@@ -1,15 +1,9 @@
 import { useState } from 'react';
-
-const followUpList = [
-  { id: '1', customerId: '1', customerName: '张雅婷', type: 'birthday', content: '生日快乐！赠送50元无门槛券', date: '2026-06-10', status: 'pending' },
-  { id: '2', customerId: '3', customerName: '王思琪', type: 'aftersale', content: '购买连衣裙后3天回访', date: '2026-06-08', status: 'pending' },
-  { id: '3', customerId: '2', customerName: '李明辉', type: 'appointment', content: '预约到店定制西装', date: '2026-06-07 14:00', status: 'today' },
-  { id: '4', customerId: '4', customerName: '陈美玲', type: 'inactive', content: '超过30天未到店，唤醒关怀', date: '2026-06-09', status: 'pending' },
-];
+import { useApp } from '../context/AppContext';
 
 export default function FollowUp() {
+  const { followUpRecords, updateFollowUpRecord } = useApp();
   const [activeTab, setActiveTab] = useState(0);
-  const [list, setList] = useState(followUpList);
   const [showResultPopup, setShowResultPopup] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [result, setResult] = useState('');
@@ -37,7 +31,7 @@ export default function FollowUp() {
     }
   };
 
-  const filteredList = list.filter(item => {
+  const filteredList = followUpRecords.filter(item => {
     if (activeTab === 0) return item.status !== 'completed';
     if (activeTab === 1) return item.status === 'today';
     if (activeTab === 2) return item.status === 'completed';
@@ -211,9 +205,11 @@ export default function FollowUp() {
                 className="btn btn-primary btn-block"
                 onClick={() => {
                   if (selectedId) {
-                    setList(prev => prev.map(item => 
-                      item.id === selectedId ? { ...item, status: 'completed' } : item
-                    ));
+                    updateFollowUpRecord(selectedId, {
+                      status: 'completed',
+                      result,
+                      note
+                    });
                   }
                   setShowResultPopup(false);
                   alert('回访结果已记录');

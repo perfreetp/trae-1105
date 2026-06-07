@@ -1,17 +1,24 @@
-import { performance, managerTasks } from '../data/mockData';
+import { useState } from 'react';
+import { useApp } from '../context/AppContext';
 
 export default function Performance() {
-  const weekData = [
-    { day: '周一', amount: 2800 },
-    { day: '周二', amount: 3200 },
-    { day: '周三', amount: 1900 },
-    { day: '周四', amount: 4500 },
-    { day: '周五', amount: 3800 },
-    { day: '周六', amount: 6200 },
-    { day: '周日', amount: 3580 },
-  ];
+  const { performance, managerTasks, updateManagerTask } = useApp();
+  const [claimedTasks, setClaimedTasks] = useState<string[]>([]);
 
+  const weekData = performance.weeklyData;
   const maxAmount = Math.max(...weekData.map(d => d.amount));
+
+  const handleClaimTask = (taskId: string) => {
+    if (claimedTasks.includes(taskId)) return;
+    setClaimedTasks(prev => [...prev, taskId]);
+    updateManagerTask(taskId, { status: 'pending' });
+    alert('任务已领取，可在今日任务中查看');
+  };
+
+  const handleCompleteTask = (taskId: string) => {
+    updateManagerTask(taskId, { status: 'completed' });
+    alert('任务已完成！奖励已发放');
+  };
 
   return (
     <div className="page-container">
@@ -136,8 +143,18 @@ export default function Performance() {
               <div className="cell-value">
                 {task.status === 'completed' ? (
                   <span className="tag tag-success">已完成</span>
+                ) : claimedTasks.includes(task.id) ? (
+                  <button 
+                    className="btn btn-primary btn-mini"
+                    onClick={() => handleCompleteTask(task.id)}
+                  >
+                    完成
+                  </button>
                 ) : (
-                  <button className="btn btn-primary btn-mini">
+                  <button 
+                    className="btn btn-primary btn-mini"
+                    onClick={() => handleClaimTask(task.id)}
+                  >
                     领取
                   </button>
                 )}

@@ -1,22 +1,51 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { products } from '../data/mockData';
 import { useState } from 'react';
+import { useApp } from '../context/AppContext';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { products, customers, addFittingRecord } = useApp();
   const product = products.find(p => p.id === id);
-  const [selectedColor, setSelectedColor] = useState('');
+  const [selectedColor, setSelectedColor] = useState(product?.colors[0] || '');
   const [selectedSize, setSelectedSize] = useState('');
   const [showStoreInventory, setShowStoreInventory] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
+  const [showAddFitting, setShowAddFitting] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState('');
 
   if (!product) {
     return <div className="page-container">商品不存在</div>;
   }
 
   const handleAddToFitting = () => {
-    alert('已加入试衣清单');
+    setShowAddFitting(true);
+  };
+
+  const confirmAddToFitting = () => {
+    if (!selectedCustomer || !selectedColor || !selectedSize) {
+      alert('请选择顾客、颜色和尺码');
+      return;
+    }
+    const customer = customers.find(c => c.id === selectedCustomer);
+    if (!customer) return;
+    
+    addFittingRecord({
+      customerId: selectedCustomer,
+      customerName: customer.name,
+      products: [{
+        productId: product.id,
+        productName: product.name,
+        size: selectedSize,
+        color: selectedColor
+      }],
+      status: 'trying',
+      createdAt: new Date().toLocaleString('zh-CN')
+    });
+    
+    setShowAddFitting(false);
+    alert('已加入试衣清单，可在试衣记录中查看');
+    setTimeout(() => navigate('/fitting'), 500);
   };
 
   const handleAction = (action: string) => {
@@ -96,7 +125,7 @@ export default function ProductDetail() {
               key={size.size}
               onClick={() => setSelectedSize(size.size)}
               className={`tag ${selectedSize === size.size ? 'tag-primary' : 'tag-default'}`}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: size.stock > 0 ? 'pointer' : 'not-allowed', opacity: size.stock > 0 ? 1 : 0.5 }}
             >
               {size.size} ({size.stock}件)
             </span>
@@ -190,6 +219,47 @@ export default function ProductDetail() {
           加入试衣清单
         </button>
       </div>
+
+      {showAddFitting && (
+        <div className="popup-mask" onClick={() => setShowAddFitting(false)}>
+          <div className="popup-content" onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '16px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>加入试衣清单</div>
+              
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>选择顾客</div>
+                <select
+                  className="input-field"
+                  value={selectedCustomer}
+                  onChange={(e) => setSelectedCustomer(e.target.value)}
+                >
+                  <option value="">请选择顾客</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>已选商品</div>
+                <div style={{ padding: '12px', background: '#f7f8fa', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '14px' }}>{product.name}</div>
+                  <div style={{ fontSize: '13px', color: '#646566', marginTop: '4px' }}>
+                    颜色：{selectedColor || '未选'} | 尺码：{selectedSize || '未选'}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="btn btn-primary btn-block"
+                onClick={confirmAddToFitting}
+              >
+                确认加入试衣清单
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showStoreInventory && (
         <div className="popup-mask" onClick={() => setShowStoreInventory(false)}>
