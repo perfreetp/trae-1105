@@ -1,10 +1,9 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { tasks, performance } from '../data/mockData';
+import { useApp } from '../context/AppContext';
 
 export default function Tasks() {
   const navigate = useNavigate();
-  const [taskList, setTaskList] = useState(tasks);
+  const { tasks, updateTask, performance, managerTasks } = useApp();
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -33,14 +32,28 @@ export default function Tasks() {
 
   const completeTask = (id: string) => {
     if (window.confirm('确定要将此任务标记为完成吗？')) {
-      setTaskList(prev => 
-        prev.map(t => t.id === id ? { ...t, status: 'completed' } : t)
-      );
+      updateTask(id, { status: 'completed' });
     }
   };
 
-  const pendingTasks = taskList.filter(t => t.status === 'pending');
-  const completedTasks = taskList.filter(t => t.status === 'completed');
+  const inProgressManagerTasks = managerTasks.filter(t => t.status === 'in_progress');
+  const allTasks = [
+    ...tasks,
+    ...inProgressManagerTasks.map(t => ({
+      id: 'mt_' + t.id,
+      title: t.title,
+      type: 'manager_task' as const,
+      priority: 'high' as const,
+      deadline: '今日',
+      status: 'pending' as const,
+      description: t.description
+    }))
+  ];
+
+  const pendingTasks = allTasks.filter(t => t.status === 'pending');
+  const completedTasks = allTasks.filter(t => t.status === 'completed');
+  const completedManagerTasks = managerTasks.filter(t => t.status === 'completed');
+  const totalCompletedCount = completedTasks.length + completedManagerTasks.length;
 
   const quickActions = [
     { icon: '📷', label: '扫码查款', path: '/products', bg: '#e8f3ff', color: '#1989fa' },
@@ -70,8 +83,8 @@ export default function Tasks() {
               <div style={{ fontSize: '12px', opacity: 0.85 }}>今日业绩</div>
             </div>
             <div className="stat-card">
-              <div style={{ fontSize: '28px', fontWeight: 600, color: '#fff' }}>{performance.customerCount}</div>
-              <div style={{ fontSize: '12px', opacity: 0.85 }}>接待客户</div>
+              <div style={{ fontSize: '28px', fontWeight: 600, color: '#fff' }}>{totalCompletedCount}</div>
+              <div style={{ fontSize: '12px', opacity: 0.85 }}>已完成</div>
             </div>
           </div>
         </div>
@@ -123,31 +136,45 @@ export default function Tasks() {
           </span>
         </div>
         <div>
-          {pendingTasks.map(task => (
-            <div key={task.id} className="cell">
-              <span className="cell-icon">{getTypeIcon(task.type)}</span>
-              <div className="cell-content">
-                <div className="cell-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>{task.title}</span>
-                  <span className={`tag tag-${getPriorityColor(task.priority)}`}>
-                    {getPriorityText(task.priority)}
-                  </span>
-                </div>
-                <div className="cell-label">{task.description}</div>
-              </div>
-              <div className="cell-value">
-                <button 
-                  className="btn btn-primary btn-mini" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    completeTask(task.id);
-                  }}
-                >
-                  完成
-                </button>
-              </div>
+          {pendingTasks.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: '#969799', fontSize: '14px' }}>
+              🎉 太棒了！暂无待办任务
             </div>
-          ))}
+          ) : (
+            pendingTasks.map(task => (
+              <div key={task.id} className="cell">
+                <span className="cell-icon">{getTypeIcon(task.type)}</span>
+                <div className="cell-content">
+                  <div className="cell-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>{task.title}</span>
+                    <span className={`tag tag-${getPriorityColor(task.priority)}`}>
+                      {getPriorityText(task.priority)}
+                    </span>
+                    {task.type === 'manager_task' && (
+                      <span className="tag tag-warning">店长任务</span>
+                    )}
+                  </div>
+                  <div className="cell-label">{task.description}</div>
+                </div>
+                <div className="cell-value">
+                  <button 
+                    className="btn btn-primary btn-mini" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (task.id.startsWith('mt_')) {
+                        alert('请到业绩统计页面完成店长任务');
+                        navigate('/performance');
+                      } else {
+                        completeTask(task.id);
+                      }
+                    }}
+                  >
+                    完成
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -156,18 +183,38 @@ export default function Tasks() {
           <span className="section-title">已完成任务</span>
         </div>
         <div>
-          {completedTasks.map(task => (
-            <div key={task.id} className="cell">
-              <span className="cell-icon">{getTypeIcon(task.type)}</span>
-              <div className="cell-content">
-                <div className="cell-title">{task.title}</div>
-                <div className="cell-label">{task.description}</div>
-              </div>
-              <div className="cell-value">
-                <span className="tag tag-success">已完成</span>
-              </div>
+          {totalCompletedCount === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: '#969799', fontSize: '14px' }}>
+              暂无已完成任务
             </div>
-          ))}
+          ) : (
+            <>
+              {completedTasks.map(task => (
+                <div key={task.id} className="cell">
+                  <span className="cell-icon">{getTypeIcon(task.type)}</span>
+                  <div className="cell-content">
+                    <div className="cell-title">{task.title}</div>
+                    <div className="cell-label">{task.description}</div>
+                  </div>
+                  <div className="cell-value">
+                    <span className="tag tag-success">已完成</span>
+                  </div>
+                </div>
+              ))}
+              {completedManagerTasks.map(task => (
+                <div key={'mt_' + task.id} className="cell">
+                  <span className="cell-icon">🚩</span>
+                  <div className="cell-content">
+                    <div className="cell-title">{task.title}</div>
+                    <div className="cell-label">{task.description}</div>
+                  </div>
+                  <div className="cell-value">
+                    <span className="tag tag-success">已完成 +¥{task.reward}</span>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>

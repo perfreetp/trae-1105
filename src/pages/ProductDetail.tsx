@@ -1,18 +1,31 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { products, customers, addFittingRecord } = useApp();
+  const location = useLocation();
+  const { products, customers, addFittingRecord, addTransferRecord } = useApp();
   const product = products.find(p => p.id === id);
   const [selectedColor, setSelectedColor] = useState(product?.colors[0] || '');
   const [selectedSize, setSelectedSize] = useState('');
   const [showStoreInventory, setShowStoreInventory] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [showAddFitting, setShowAddFitting] = useState(false);
+  const [showTransferPopup, setShowTransferPopup] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [transferCustomer, setTransferCustomer] = useState('');
+  const [transferFromStore, setTransferFromStore] = useState('');
+  const [fromScan, setFromScan] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('fromScan') === 'true') {
+      setFromScan(true);
+      setTimeout(() => setFromScan(false), 3000);
+    }
+  }, [location.search]);
 
   if (!product) {
     return <div className="page-container">商品不存在</div>;
@@ -44,6 +57,7 @@ export default function ProductDetail() {
     });
     
     setShowAddFitting(false);
+    setSelectedCustomer('');
     alert('已加入试衣清单，可在试衣记录中查看');
     setTimeout(() => navigate('/fitting'), 500);
   };
@@ -52,11 +66,38 @@ export default function ProductDetail() {
     setShowActionSheet(false);
     switch (action) {
       case 'transfer':
-        alert('已提交调货申请');
+        setShowTransferPopup(true);
         break;
       case 'share':
         alert('分享功能');
         break;
+    }
+  };
+
+  const handleConfirmTransfer = () => {
+    if (!transferCustomer || !selectedColor || !selectedSize || !transferFromStore) {
+      alert('请填写完整调货信息');
+      return;
+    }
+    const customer = customers.find(c => c.id === transferCustomer);
+    if (customer) {
+      addTransferRecord({
+        productId: product.id,
+        productName: product.name,
+        productImage: product.image,
+        customerId: customer.id,
+        customerName: customer.name,
+        size: selectedSize,
+        color: selectedColor,
+        fromStore: transferFromStore,
+        toStore: '本店',
+        status: 'pending',
+        createTime: new Date().toLocaleString('zh-CN')
+      });
+      setShowTransferPopup(false);
+      setTransferCustomer('');
+      setTransferFromStore('');
+      alert('调货申请已提交，可在会员详情中查看');
     }
   };
 
@@ -73,6 +114,21 @@ export default function ProductDetail() {
           <span className="navbar-title">商品详情</span>
         </div>
       </div>
+
+      {fromScan && (
+        <div style={{ 
+          background: 'linear-gradient(90deg, #1989fa, #07c160)', 
+          color: '#fff', 
+          padding: '12px 16px',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>✓</span>
+          <span>扫码成功，已加载尺码库存信息</span>
+        </div>
+      )}
 
       <div>
         <img 
@@ -123,9 +179,12 @@ export default function ProductDetail() {
           {product.sizes.map(size => (
             <span
               key={size.size}
-              onClick={() => setSelectedSize(size.size)}
+              onClick={() => size.stock > 0 && setSelectedSize(size.size)}
               className={`tag ${selectedSize === size.size ? 'tag-primary' : 'tag-default'}`}
-              style={{ cursor: size.stock > 0 ? 'pointer' : 'not-allowed', opacity: size.stock > 0 ? 1 : 0.5 }}
+              style={{ 
+                cursor: size.stock > 0 ? 'pointer' : 'not-allowed', 
+                opacity: size.stock > 0 ? 1 : 0.5 
+              }}
             >
               {size.size} ({size.stock}件)
             </span>
@@ -280,12 +339,109 @@ export default function ProductDetail() {
                 className="btn btn-primary btn-block"
                 style={{ marginTop: '16px' }}
                 onClick={() => {
-                  alert('已提交调货申请');
                   setShowStoreInventory(false);
+                  setShowTransferPopup(true);
                 }}
               >
                 申请调货
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTransferPopup && (
+        <div className="popup-mask" onClick={() => setShowTransferPopup(false)}>
+          <div className="popup-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ padding: '16px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>申请调货</div>
+              
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>商品信息</div>
+                <div style={{ padding: '12px', background: '#f7f8fa', borderRadius: '8px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500 }}>{product.name}</div>
+                  <div style={{ fontSize: '13px', color: '#646566', marginTop: '4px' }}>
+                    货号：{product.code}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>选择顾客</div>
+                <select
+                  className="input-field"
+                  value={transferCustomer}
+                  onChange={(e) => setTransferCustomer(e.target.value)}
+                >
+                  <option value="">请选择顾客</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} - {c.level}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>颜色</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {product.colors.map(c => (
+                    <button
+                      key={c}
+                      className={`tag ${selectedColor === c ? 'tag-primary' : 'tag-default'}`}
+                      onClick={() => setSelectedColor(c)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>尺码</div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {product.sizes.map(s => (
+                    <button
+                      key={s.size}
+                      className={`tag ${selectedSize === s.size ? 'tag-primary' : 'tag-default'}`}
+                      onClick={() => setSelectedSize(s.size)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {s.size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '6px' }}>来源门店</div>
+                <select
+                  className="input-field"
+                  value={transferFromStore}
+                  onChange={(e) => setTransferFromStore(e.target.value)}
+                >
+                  <option value="">请选择门店</option>
+                  {product.storeStock?.map(s => (
+                    <option key={s.store} value={s.store}>{s.store}（库存{s.stock}件）</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  className="btn btn-default"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowTransferPopup(false)}
+                >
+                  取消
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  onClick={handleConfirmTransfer}
+                >
+                  提交申请
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -66,8 +66,15 @@ export default function Products() {
     setScanResult(randomProduct.code);
     setTimeout(() => {
       setShowScanPopup(false);
-      navigate(`/product/${randomProduct.id}`);
+      navigate(`/product/${randomProduct.id}?fromScan=true&code=${randomProduct.code}`);
     }, 800);
+  };
+
+  const handleRescan = () => {
+    setScanResult('');
+    setTimeout(() => {
+      handleScan();
+    }, 300);
   };
 
   const resetFilter = () => {
@@ -175,7 +182,29 @@ export default function Products() {
               {scanResult ? (
                 <div>
                   <div style={{ color: '#07c160', marginBottom: '8px' }}>✓ 扫码成功</div>
-                  <div style={{ fontSize: '14px', color: '#646566' }}>货号：{scanResult}</div>
+                  <div style={{ fontSize: '14px', color: '#646566', marginBottom: '16px' }}>货号：{scanResult}</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      className="btn btn-default" 
+                      style={{ flex: 1 }}
+                      onClick={handleRescan}
+                    >
+                      重新扫码
+                    </button>
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        const product = products.find(p => p.code === scanResult);
+                        if (product) {
+                          setShowScanPopup(false);
+                          navigate(`/product/${product.id}?fromScan=true&code=${product.code}`);
+                        }
+                      }}
+                    >
+                      查看详情
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button className="btn btn-primary btn-block" onClick={handleScan}>

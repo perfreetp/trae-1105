@@ -4,7 +4,14 @@ import { useApp } from '../context/AppContext';
 
 export default function Outfits() {
   const navigate = useNavigate();
-  const { outfits, products, addOutfit, addFittingRecord, customers } = useApp();
+  const { 
+    outfits, 
+    products, 
+    addOutfit, 
+    addFittingRecord, 
+    customers, 
+    addOutfitRecommendation 
+  } = useApp();
   const [showCreatePopup, setShowCreatePopup] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [showDetailPopup, setShowDetailPopup] = useState(false);
@@ -91,14 +98,27 @@ export default function Outfits() {
   };
 
   const handleRecommend = () => {
-    if (!selectedCustomer) {
+    if (!selectedCustomer || !selectedOutfit) {
       alert('请选择会员');
       return;
     }
     const customer = customers.find(c => c.id === selectedCustomer);
-    alert(`已将搭配推荐给 ${customer?.name}`);
+    if (customer) {
+      addOutfitRecommendation({
+        outfitId: selectedOutfit.id,
+        outfitName: selectedOutfit.name,
+        outfitImage: selectedOutfit.image,
+        outfitProducts: selectedOutfit.products,
+        totalPrice: getTotalPrice(selectedOutfit.products),
+        customerId: customer.id,
+        customerName: customer.name,
+        recommendTime: new Date().toLocaleString('zh-CN')
+      });
+      alert(`已将搭配推荐给 ${customer.name}，可在会员详情和跟进中查看`);
+    }
     setShowRecommendPopup(false);
     setShowDetailPopup(false);
+    setSelectedCustomer('');
   };
 
   const actions = [

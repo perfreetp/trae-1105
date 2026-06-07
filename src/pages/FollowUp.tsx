@@ -2,12 +2,20 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 export default function FollowUp() {
-  const { followUpRecords, updateFollowUpRecord } = useApp();
+  const { 
+    followUpRecords, 
+    updateFollowUpRecord, 
+    outfitRecommendations, 
+    updateOutfitRecommendation
+  } = useApp();
   const [activeTab, setActiveTab] = useState(0);
   const [showResultPopup, setShowResultPopup] = useState(false);
+  const [showOutfitFeedbackPopup, setShowOutfitFeedbackPopup] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedOutfitRecId, setSelectedOutfitRecId] = useState<string | null>(null);
   const [result, setResult] = useState('');
   const [note, setNote] = useState('');
+  const [outfitFeedback, setOutfitFeedback] = useState<string>('');
 
   const tabs = ['待跟进', '今日', '已完成'];
 
@@ -17,6 +25,8 @@ export default function FollowUp() {
       case 'aftersale': return '❤️';
       case 'appointment': return '📅';
       case 'inactive': return '🔔';
+      case 'outfit': return '👗';
+      case 'care': return '💝';
       default: return '❤️';
     }
   };
@@ -27,6 +37,8 @@ export default function FollowUp() {
       case 'aftersale': return '售后回访';
       case 'appointment': return '预约提醒';
       case 'inactive': return '沉睡唤醒';
+      case 'outfit': return '搭配反馈';
+      case 'care': return '会员关怀';
       default: return '会员关怀';
     }
   };
@@ -42,6 +54,18 @@ export default function FollowUp() {
     setSelectedId(id);
     setShowResultPopup(true);
   };
+
+  const handleOutfitFeedback = (recId: string) => {
+    setSelectedOutfitRecId(recId);
+    setShowOutfitFeedbackPopup(true);
+  };
+
+  const outfitFeedbackOptions = [
+    { value: 'like', label: '喜欢，有意向' },
+    { value: 'considering', label: '待考虑' },
+    { value: 'tried', label: '已到店试穿' },
+    { value: 'rejected', label: '不喜欢' },
+  ];
 
   const quickActions = [
     { icon: '🎁', label: '生日祝福', bg: '#fff0f5', color: '#f26da9', action: () => alert('已为所有今日生日会员发送祝福短信') },
@@ -157,6 +181,42 @@ export default function FollowUp() {
               </div>
             </div>
           ))}
+          
+          {activeTab !== 2 && outfitRecommendations.filter(r => !r.feedback).length > 0 && (
+            <div style={{ padding: '12px 16px 8px', fontSize: '13px', color: '#969799', borderTop: '1px solid #ebedf0' }}>
+              搭配推荐跟进
+            </div>
+          )}
+          {activeTab !== 2 && outfitRecommendations.filter(r => !r.feedback).map(rec => (
+            <div key={rec.id} className="cell">
+              <img 
+                src={rec.outfitImage} 
+                alt="" 
+                style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }}
+              />
+              <div className="cell-content">
+                <div className="cell-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {rec.customerName}
+                  <span className="tag tag-warning" style={{ fontSize: '11px' }}>搭配反馈</span>
+                </div>
+                <div className="cell-label">
+                  <div style={{ fontSize: '12px', color: '#646566' }}>{rec.outfitName} · ¥{rec.totalPrice}</div>
+                  <div style={{ fontSize: '11px', color: '#969799', marginTop: '2px' }}>{rec.recommendTime}</div>
+                </div>
+              </div>
+              <div className="cell-value">
+                <button
+                  className="btn btn-primary btn-mini"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOutfitFeedback(rec.id);
+                  }}
+                >
+                  填反馈
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -217,6 +277,70 @@ export default function FollowUp() {
               >
                 提交回访结果
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOutfitFeedbackPopup && (
+        <div className="popup-mask" onClick={() => setShowOutfitFeedbackPopup(false)}>
+          <div className="popup-content" onClick={(e) => e.stopPropagation()}>
+            <div style={{ padding: '16px' }}>
+              <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>填写搭配反馈</div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>反馈结果</div>
+                <div className="radio-group">
+                  {outfitFeedbackOptions.map(opt => (
+                    <div
+                      key={opt.value}
+                      className={`radio-item ${outfitFeedback === opt.value ? 'checked' : ''}`}
+                      onClick={() => setOutfitFeedback(opt.value)}
+                    >
+                      <span className="radio-circle"></span>
+                      <span>{opt.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>反馈备注</div>
+                <textarea
+                  className="input-field textarea"
+                  placeholder="请输入反馈备注"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  className="btn btn-default"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowOutfitFeedbackPopup(false)}
+                >
+                  取消
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    if (selectedOutfitRecId && outfitFeedback) {
+                      updateOutfitRecommendation(selectedOutfitRecId, {
+                        feedback: outfitFeedback as any,
+                        feedbackNote: note
+                      });
+                      alert('搭配反馈已记录');
+                    }
+                    setShowOutfitFeedbackPopup(false);
+                    setOutfitFeedback('');
+                    setNote('');
+                  }}
+                >
+                  提交反馈
+                </button>
+              </div>
             </div>
           </div>
         </div>

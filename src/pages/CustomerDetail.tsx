@@ -5,15 +5,30 @@ import { useApp } from '../context/AppContext';
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { customers, addCustomerPreference, addFollowUpRecord, addTransferRecord, transferRecords } = useApp();
+  const { 
+    customers, 
+    addCustomerPreference, 
+    addFollowUpRecord, 
+    addTransferRecord, 
+    transferRecords,
+    activityRecords,
+    outfitRecommendations,
+    addActivityRecord,
+    products
+  } = useApp();
   const customer = customers.find(c => c.id === id);
   const [showNotePopup, setShowNotePopup] = useState(false);
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [showAppointmentPopup, setShowAppointmentPopup] = useState(false);
+  const [showTransferPopup, setShowTransferPopup] = useState(false);
   const [note, setNote] = useState('');
   const [preferenceText, setPreferenceText] = useState('');
   const [appointmentDate, setAppointmentDate] = useState('');
   const [appointmentTime, setAppointmentTime] = useState('');
+  const [transferColor, setTransferColor] = useState('');
+  const [transferSize, setTransferSize] = useState('');
+  const [transferFromStore, setTransferFromStore] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<string>('');
 
   if (!customer) {
     return <div className="page-container">顾客不存在</div>;
@@ -27,7 +42,39 @@ export default function CustomerDetail() {
     }
   };
 
+  const customerActivities = activityRecords.filter(a => a.customerId === id);
   const customerTransfers = transferRecords.filter(t => t.customerId === id);
+  const customerOutfitRecs = outfitRecommendations.filter(o => o.customerId === id);
+
+  const getActivityIcon = (type: string) => {
+    const icons: Record<string, string> = {
+      'fitting_added': '👕',
+      'fitting_purchased': '💰',
+      'fitting_abandoned': '❌',
+      'outfit_recommended': '👗',
+      'care_sent': '❤️',
+      'appointment_created': '📅',
+      'transfer_requested': '📦',
+      'preference_updated': '📝',
+      'note_added': '📋'
+    };
+    return icons[type] || '📌';
+  };
+
+  const getActivityColor = (type: string) => {
+    const colors: Record<string, string> = {
+      'fitting_added': '#1989fa',
+      'fitting_purchased': '#07c160',
+      'fitting_abandoned': '#ee0a24',
+      'outfit_recommended': '#ff976a',
+      'care_sent': '#ff6034',
+      'appointment_created': '#7232dd',
+      'transfer_requested': '#00b578',
+      'preference_updated': '#969799',
+      'note_added': '#646566'
+    };
+    return colors[type] || '#969799';
+  };
 
   const handleAction = (action: string) => {
     setShowActionSheet(false);
@@ -47,6 +94,14 @@ export default function CustomerDetail() {
           date: new Date().toLocaleDateString('zh-CN'),
           status: 'today'
         });
+        addActivityRecord({
+          customerId: customer.id,
+          customerName: customer.name,
+          type: 'care_sent',
+          title: '发送会员关怀',
+          content: '会员关怀问候已发送',
+          time: new Date().toLocaleString('zh-CN')
+        });
         alert('已发送会员关怀，可在会员跟进中查看');
         break;
       case 'appointment':
@@ -56,19 +111,7 @@ export default function CustomerDetail() {
         alert('已登记成交记录');
         break;
       case 'transfer':
-        addTransferRecord({
-          productId: 'demo',
-          productName: '调货商品',
-          customerId: customer.id,
-          customerName: customer.name,
-          size: 'M',
-          color: '黑色',
-          fromStore: '总店',
-          toStore: '本店',
-          status: 'pending',
-          createTime: new Date().toLocaleString('zh-CN')
-        });
-        alert('已提交调货申请');
+        setShowTransferPopup(true);
         break;
       case 'note':
         setShowNotePopup(true);
@@ -98,10 +141,47 @@ export default function CustomerDetail() {
       date: `${appointmentDate} ${appointmentTime}`,
       status: 'today'
     });
+    addActivityRecord({
+      customerId: customer.id,
+      customerName: customer.name,
+      type: 'appointment_created',
+      title: '预约到店',
+      content: `预约时间: ${appointmentDate} ${appointmentTime}`,
+      time: new Date().toLocaleString('zh-CN')
+    });
     setShowAppointmentPopup(false);
     setAppointmentDate('');
     setAppointmentTime('');
     alert('预约已创建，可在会员跟进中查看');
+  };
+
+  const handleSaveTransfer = () => {
+    if (!selectedProduct || !transferColor || !transferSize || !transferFromStore) {
+      alert('请填写完整调货信息');
+      return;
+    }
+    const product = products.find(p => p.id === selectedProduct);
+    if (product) {
+      addTransferRecord({
+        productId: product.id,
+        productName: product.name,
+        productImage: product.image,
+        customerId: customer.id,
+        customerName: customer.name,
+        size: transferSize,
+        color: transferColor,
+        fromStore: transferFromStore,
+        toStore: '本店',
+        status: 'pending',
+        createTime: new Date().toLocaleString('zh-CN')
+      });
+      setShowTransferPopup(false);
+      setSelectedProduct('');
+      setTransferColor('');
+      setTransferSize('');
+      setTransferFromStore('');
+      alert('调货申请已提交');
+    }
   };
 
   const actions = [
@@ -212,27 +292,36 @@ export default function CustomerDetail() {
         </div>
       </div>
 
-      <div className="card-section">
-        <div className="section-header">
-          <span className="section-title">可用优惠券</span>
-        </div>
-        {customer.coupons.map((coupon) => (
-          <div key={coupon.id} className="cell">
-            <div className="cell-content">
-              <div className="cell-title">{coupon.name}</div>
-              <div className="cell-label">{coupon.expireDate}到期</div>
+      {customerOutfitRecs.length > 0 && (
+        <div className="card-section">
+          <div className="section-header">
+            <span className="section-title">搭配推荐</span>
+          </div>
+          {customerOutfitRecs.map(rec => (
+            <div key={rec.id} className="cell">
+              <img 
+                src={rec.outfitImage} 
+                alt="" 
+                style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover' }}
+              />
+              <div className="cell-content">
+                <div className="cell-title">{rec.outfitName}</div>
+                <div className="cell-label">{rec.recommendTime} · {rec.outfitProducts.length}件单品</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ color: '#ee0a24', fontWeight: 600 }}>¥{rec.totalPrice}</div>
+                <div style={{ fontSize: '12px', color: rec.feedback ? '#07c160' : '#969799' }}>
+                  {rec.feedback ? (
+                    rec.feedback === 'like' ? '喜欢' :
+                    rec.feedback === 'considering' ? '待考虑' :
+                    rec.feedback === 'tried' ? '已试穿' : '不喜欢'
+                  ) : '待反馈'}
+                </div>
+              </div>
             </div>
-            <span className="cell-value" style={{ color: '#ee0a24', fontWeight: 600 }}>
-              {coupon.discount}
-            </span>
-          </div>
-        ))}
-        {customer.coupons.length === 0 && (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#969799', fontSize: '14px' }}>
-            暂无可用优惠券
-          </div>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {customerTransfers.length > 0 && (
         <div className="card-section">
@@ -241,9 +330,14 @@ export default function CustomerDetail() {
           </div>
           {customerTransfers.map(record => (
             <div key={record.id} className="cell">
+              <img 
+                src={record.productImage} 
+                alt="" 
+                style={{ width: '48px', height: '48px', borderRadius: '4px', objectFit: 'cover' }}
+              />
               <div className="cell-content">
                 <div className="cell-title">{record.productName}</div>
-                <div className="cell-label">{record.createTime}</div>
+                <div className="cell-label">{record.color} {record.size} · {record.createTime}</div>
               </div>
               <span 
                 className="cell-value"
@@ -272,6 +366,61 @@ export default function CustomerDetail() {
             <span className="cell-value" style={{ color: '#ee0a24' }}>¥{record.amount}</span>
           </div>
         ))}
+      </div>
+
+      <div className="card-section">
+        <div className="section-header">
+          <span className="section-title">接待时间线</span>
+        </div>
+        <div style={{ padding: '16px' }}>
+          {customerActivities.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '24px', color: '#969799', fontSize: '14px' }}>
+              暂无接待记录
+            </div>
+          ) : (
+            <div style={{ position: 'relative', paddingLeft: '24px' }}>
+              <div style={{ 
+                position: 'absolute', 
+                left: '7px', 
+                top: '8px', 
+                bottom: '8px', 
+                width: '2px', 
+                background: '#ebedf0' 
+              }} />
+              {customerActivities.map((activity) => (
+                <div key={activity.id} style={{ position: 'relative', marginBottom: '16px' }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    left: '-24px', 
+                    top: '2px', 
+                    width: '16px', 
+                    height: '16px', 
+                    borderRadius: '50%', 
+                    background: getActivityColor(activity.type),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10px'
+                  }}>
+                    {getActivityIcon(activity.type)}
+                  </div>
+                  <div style={{ background: '#f7f8fa', padding: '12px', borderRadius: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontWeight: 500, fontSize: '14px' }}>{activity.title}</span>
+                      <span style={{ fontSize: '12px', color: '#969799' }}>{activity.time}</span>
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#646566' }}>{activity.content}</div>
+                    {activity.amount && (
+                      <div style={{ marginTop: '4px', fontSize: '13px', color: '#ee0a24', fontWeight: 500 }}>
+                        ¥{activity.amount}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: '#fff', padding: '12px 16px', borderTop: '1px solid #ebedf0', zIndex: 50 }}>
@@ -326,7 +475,7 @@ export default function CustomerDetail() {
                 <input 
                   type="text" 
                   className="input-field" 
-                  placeholder="偏好标签（多个用逗号分隔）" 
+                  placeholder="偏好标签（如：简约通勤、喜欢蓝色）" 
                   value={preferenceText}
                   onChange={(e) => setPreferenceText(e.target.value)}
                 />
@@ -389,6 +538,93 @@ export default function CustomerDetail() {
                   onClick={handleSaveAppointment}
                 >
                   确认预约
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showTransferPopup && (
+        <div className="popup-mask" onClick={() => setShowTransferPopup(false)}>
+          <div className="popup-content" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ padding: '16px' }}>
+              <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>申请调货</div>
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '14px', marginBottom: '6px' }}>选择商品</div>
+                <select
+                  className="input-field"
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                >
+                  <option value="">请选择商品</option>
+                  {products.slice(0, 6).map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              {selectedProduct && (
+                <>
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '14px', marginBottom: '6px' }}>颜色</div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {products.find(p => p.id === selectedProduct)?.colors.map(c => (
+                        <button
+                          key={c}
+                          className={`tag ${transferColor === c ? 'tag-primary' : 'tag-default'}`}
+                          onClick={() => setTransferColor(c)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <div style={{ fontSize: '14px', marginBottom: '6px' }}>尺码</div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {products.find(p => p.id === selectedProduct)?.sizes.map(s => (
+                        <button
+                          key={s.size}
+                          className={`tag ${transferSize === s.size ? 'tag-primary' : 'tag-default'}`}
+                          onClick={() => setTransferSize(s.size)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {s.size} ({s.stock > 0 ? `库存${s.stock}` : '缺货'})
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '14px', marginBottom: '6px' }}>来源门店</div>
+                <select
+                  className="input-field"
+                  value={transferFromStore}
+                  onChange={(e) => setTransferFromStore(e.target.value)}
+                >
+                  <option value="">请选择门店</option>
+                  <option value="中心店">中心店</option>
+                  <option value="万达店">万达店</option>
+                  <option value="银泰店">银泰店</option>
+                  <option value="万象城店">万象城店</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  className="btn btn-default"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowTransferPopup(false)}
+                >
+                  取消
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  onClick={handleSaveTransfer}
+                >
+                  提交申请
                 </button>
               </div>
             </div>

@@ -97,7 +97,45 @@ export interface ManagerTask {
   title: string;
   description: string;
   reward: number;
-  status: 'pending' | 'completed';
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+export type ActivityType = 
+  | 'fitting_added' 
+  | 'fitting_purchased' 
+  | 'fitting_abandoned' 
+  | 'outfit_recommended'
+  | 'care_sent'
+  | 'appointment_created'
+  | 'transfer_requested'
+  | 'preference_updated'
+  | 'note_added';
+
+export interface ActivityRecord {
+  id: string;
+  customerId: string;
+  customerName: string;
+  type: ActivityType;
+  title: string;
+  content: string;
+  time: string;
+  relatedId?: string;
+  amount?: number;
+  extra?: Record<string, any>;
+}
+
+export interface OutfitRecommendation {
+  id: string;
+  outfitId: string;
+  outfitName: string;
+  outfitImage: string;
+  outfitProducts: string[];
+  totalPrice: number;
+  customerId: string;
+  customerName: string;
+  recommendTime: string;
+  feedback?: 'like' | 'considering' | 'tried' | 'rejected';
+  feedbackNote?: string;
 }
 
 export const tasks: Task[] = [

@@ -1,23 +1,28 @@
-import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Performance() {
+  const navigate = useNavigate();
   const { performance, managerTasks, updateManagerTask } = useApp();
-  const [claimedTasks, setClaimedTasks] = useState<string[]>([]);
 
   const weekData = performance.weeklyData;
   const maxAmount = Math.max(...weekData.map(d => d.amount));
+  const completedTaskCount = managerTasks.filter(t => t.status === 'completed').length;
+  const totalTaskReward = managerTasks
+    .filter(t => t.status === 'completed')
+    .reduce((sum, t) => sum + t.reward, 0);
 
   const handleClaimTask = (taskId: string) => {
-    if (claimedTasks.includes(taskId)) return;
-    setClaimedTasks(prev => [...prev, taskId]);
-    updateManagerTask(taskId, { status: 'pending' });
+    updateManagerTask(taskId, { status: 'in_progress' });
     alert('任务已领取，可在今日任务中查看');
   };
 
   const handleCompleteTask = (taskId: string) => {
-    updateManagerTask(taskId, { status: 'completed' });
-    alert('任务已完成！奖励已发放');
+    const task = managerTasks.find(t => t.id === taskId);
+    if (task) {
+      updateManagerTask(taskId, { status: 'completed' });
+      alert(`任务已完成！获得奖励 ¥${task.reward}`);
+    }
   };
 
   return (
@@ -34,12 +39,12 @@ export default function Performance() {
           <div style={{ marginBottom: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', marginBottom: '4px' }}>
               <span>业绩目标</span>
-              <span>¥{performance.monthCompleted} / ¥{performance.monthTarget}</span>
+              <span>¥{performance.monthCompleted + totalTaskReward} / ¥{performance.monthTarget}</span>
             </div>
             <div className="progress-bar">
               <div 
                 className="progress-inner" 
-                style={{ width: `${(performance.monthCompleted / performance.monthTarget) * 100}%` }}
+                style={{ width: `${((performance.monthCompleted + totalTaskReward) / performance.monthTarget) * 100}%` }}
               ></div>
             </div>
           </div>
@@ -63,17 +68,28 @@ export default function Performance() {
       <div className="card-section">
         <div className="section-header">
           <span className="section-title">今日目标</span>
+          <span 
+            style={{ fontSize: '13px', color: '#1989fa', cursor: 'pointer' }}
+            onClick={() => navigate('/tasks')}
+          >
+            查看今日任务 →
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           <div 
             className="circle-progress"
-            style={{ ['--progress' as any]: `${(performance.dayCompleted / performance.dayTarget) * 360}deg` }}
+            style={{ ['--progress' as any]: `${((performance.dayCompleted + totalTaskReward) / performance.dayTarget) * 360}deg` }}
           >
-            <span className="circle-progress-text">{Math.round((performance.dayCompleted / performance.dayTarget) * 100)}%</span>
+            <span className="circle-progress-text">{Math.round(((performance.dayCompleted + totalTaskReward) / performance.dayTarget) * 100)}%</span>
           </div>
           <div style={{ marginLeft: '32px' }}>
-            <div style={{ fontSize: '24px', fontWeight: 600, color: '#ee0a24' }}>¥{performance.dayCompleted}</div>
+            <div style={{ fontSize: '24px', fontWeight: 600, color: '#ee0a24' }}>¥{performance.dayCompleted + totalTaskReward}</div>
             <div style={{ fontSize: '14px', color: '#969799', marginTop: '4px' }}>目标 ¥{performance.dayTarget}</div>
+            {totalTaskReward > 0 && (
+              <div style={{ fontSize: '12px', color: '#07c160', marginTop: '4px' }}>
+                含任务奖励 ¥{totalTaskReward}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -128,13 +144,21 @@ export default function Performance() {
       <div className="card-section">
         <div className="section-header">
           <span className="section-title">店长任务</span>
+          <span className="badge" style={{ marginLeft: '8px' }}>
+            {completedTaskCount}/{managerTasks.length}
+          </span>
         </div>
         <div>
           {managerTasks.map(task => (
             <div key={task.id} className="cell">
               <span className="cell-icon">🚩</span>
               <div className="cell-content">
-                <div className="cell-title">{task.title}</div>
+                <div className="cell-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {task.title}
+                  {task.status === 'in_progress' && (
+                    <span className="tag tag-warning">进行中</span>
+                  )}
+                </div>
                 <div className="cell-label">{task.description}</div>
                 <div style={{ fontSize: '11px', color: '#ff976a', marginTop: '2px' }}>
                   奖励：¥{task.reward}
@@ -143,7 +167,7 @@ export default function Performance() {
               <div className="cell-value">
                 {task.status === 'completed' ? (
                   <span className="tag tag-success">已完成</span>
-                ) : claimedTasks.includes(task.id) ? (
+                ) : task.status === 'in_progress' ? (
                   <button 
                     className="btn btn-primary btn-mini"
                     onClick={() => handleCompleteTask(task.id)}
